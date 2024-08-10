@@ -1,16 +1,16 @@
 {
   "files": {
     "main.css": "/max-skill-trim/static/css/main.f158f41a.css",
-    "main.js": "/max-skill-trim/static/js/main.29b3ee9e.js",
+    "main.js": "/max-skill-trim/static/js/main.878f490d.js",
     "static/js/787.b2ae1a68.chunk.js": "/max-skill-trim/static/js/787.b2ae1a68.chunk.js",
     "static/media/example-skills.png": "/max-skill-trim/static/media/example-skills.92ce65c70741f2ea8afa.png",
     "index.html": "/max-skill-trim/index.html",
     "main.f158f41a.css.map": "/max-skill-trim/static/css/main.f158f41a.css.map",
-    "main.29b3ee9e.js.map": "/max-skill-trim/static/js/main.29b3ee9e.js.map",
+    "main.878f490d.js.map": "/max-skill-trim/static/js/main.878f490d.js.map",
     "787.b2ae1a68.chunk.js.map": "/max-skill-trim/static/js/787.b2ae1a68.chunk.js.map"
   },
   "entrypoints": [
     "static/css/main.f158f41a.css",
-    "static/js/main.29b3ee9e.js"
+    "static/js/main.878f490d.js"
   ]
 }
