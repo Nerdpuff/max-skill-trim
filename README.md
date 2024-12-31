@@ -1,9 +1,4 @@
 # Custom Trims
-
-The purpose of this branch is to allow people to submit custom trims.
-
-Trims can be browsed at: https://nathanquayle.github.io/max-skill-trim/.
-
 ## Installing custom trims.
 
 1. Find the trim you'd like from below and click the link or navigate to the trim manually by going to the custom-trims folder.
