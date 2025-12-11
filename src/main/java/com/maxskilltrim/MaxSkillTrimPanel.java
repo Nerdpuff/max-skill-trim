@@ -12,7 +12,10 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ItemEvent;
 import java.io.File;
+import java.lang.management.ManagementFactory;
+import java.util.List;
 import java.util.Objects;
+import java.util.stream.Stream;
 
 @Slf4j
 @Singleton
@@ -22,7 +25,7 @@ public class MaxSkillTrimPanel extends PluginPanel
     ConfigManager configManager;
 
     @Inject
-    public MaxSkillTrimPanel(MaxSkillTrimConfig config)
+    public MaxSkillTrimPanel(MaxSkillTrimConfig config, MaxSkillTrimPlugin plugin)
     {
         JPanel container = new JPanel();
         container.setBackground(ColorScheme.DARK_GRAY_COLOR);
@@ -61,7 +64,7 @@ public class MaxSkillTrimPanel extends PluginPanel
         container.add(refreshButton, constraints);
 
         JButton getMoreTrimsButton = new JButton("Get more trims!");
-        getMoreTrimsButton.addActionListener((e) -> LinkBrowser.browse("https://github.com/NathanQuayle/max-skill-trim/tree/custom-trims"));
+        getMoreTrimsButton.addActionListener((e) -> LinkBrowser.browse("https://github.com/Nerdpuff/max-skill-trim/tree/custom-trims"));
         constraints.gridx = 0;
         constraints.gridy = 1;
         constraints.gridwidth = GridBagConstraints.REMAINDER;
@@ -94,7 +97,80 @@ public class MaxSkillTrimPanel extends PluginPanel
         constraints.fill = GridBagConstraints.HORIZONTAL;
         container.add(maxExperienceComboBox, constraints);
 
+        if (isDeveloperMode()) addDeveloperSection(plugin, container);
+
         add(container);
+    }
+
+    private static void addDeveloperSection(MaxSkillTrimPlugin plugin, JPanel container) {
+        JPanel devPanel = new JPanel();
+        devPanel.setLayout(new BoxLayout(devPanel, BoxLayout.Y_AXIS));
+        devPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+        devPanel.setBorder(BorderFactory.createTitledBorder("Developer Tools"));
+
+        JPanel developerPanel = new JPanel(new GridBagLayout());
+
+        GridBagConstraints buttonConstraints = new GridBagConstraints();
+        JCheckBox enableOverridesCheckbox = new JCheckBox("Enable Overrides");
+        enableOverridesCheckbox.addActionListener(e -> {
+            plugin.setMockOverridesEnabled(enableOverridesCheckbox.isSelected());
+        });
+        buttonConstraints.gridx = 0;
+        buttonConstraints.gridy = 0;
+        buttonConstraints.gridwidth = GridBagConstraints.REMAINDER;
+        buttonConstraints.anchor = GridBagConstraints.LINE_START;
+        developerPanel.add(enableOverridesCheckbox, buttonConstraints);
+
+        GridBagConstraints skillConstraints = new GridBagConstraints();
+        skillConstraints.insets = new Insets(2, 2, 2, 2);
+        skillConstraints.anchor = GridBagConstraints.LINE_START;
+        skillConstraints.fill = GridBagConstraints.HORIZONTAL;
+
+        SkillData[] skills = SkillData.values();
+        for (int i = 0; i < skills.length; i++) {
+            SkillData skill = skills[i];
+            skillConstraints.gridx = 0;
+            skillConstraints.gridy = i + 1;
+            developerPanel.add(new JLabel(skill.name()), skillConstraints);
+
+            // Max Level checkbox
+            skillConstraints.gridx = 1;
+            JCheckBox maxLevelToggle = new JCheckBox("ML");
+            maxLevelToggle.addActionListener(e -> {
+                plugin.setMockTrimState(skill, maxLevelToggle.isSelected(), TrimType.MAX_LEVEL);
+            });
+            developerPanel.add(maxLevelToggle, skillConstraints);
+
+            // Max Experience checkbox
+            skillConstraints.gridx = 2;
+            JCheckBox maxExpToggle = new JCheckBox("ME");
+            maxExpToggle.addActionListener(e -> {
+                plugin.setMockTrimState(skill, maxExpToggle.isSelected(), TrimType.MAX_EXPERIENCE);
+            });
+            developerPanel.add(maxExpToggle, skillConstraints);
+        }
+
+        JScrollPane scrollPane = new JScrollPane(developerPanel);
+        scrollPane.setPreferredSize(new Dimension(220, 400));
+        scrollPane.setBorder(null);
+        devPanel.add(scrollPane);
+
+        GridBagConstraints devConstraints = new GridBagConstraints();
+        devConstraints.gridx = 0;
+        devConstraints.gridy = 6;
+        devConstraints.gridwidth = GridBagConstraints.REMAINDER;
+        devConstraints.fill = GridBagConstraints.BOTH;
+        devConstraints.weightx = 1.0;
+        devConstraints.weighty = 1.0;
+        container.add(devPanel, devConstraints);
+    }
+
+    private boolean isDeveloperMode() {
+        // Check JVM args for '--developer-mode'
+        List<String> args = ManagementFactory.getRuntimeMXBean().getInputArguments();
+        String cmd = System.getProperty("sun.java.command", "");
+        return Stream.concat(args.stream(), Stream.of(cmd.split(" ")))
+                .anyMatch(s -> s.trim().equalsIgnoreCase("--developer-mode"));
     }
 
     private JComboBox<String> buildComboBoxPanel(String selectedTrimConfigKey, String selectedFilename) {

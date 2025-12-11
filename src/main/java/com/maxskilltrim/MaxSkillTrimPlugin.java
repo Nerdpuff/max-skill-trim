@@ -6,6 +6,7 @@ import com.google.inject.Provides;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.events.*;
+import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.widgets.*;
 import net.runelite.client.RuneLite;
 import net.runelite.client.callback.ClientThread;
@@ -20,10 +21,15 @@ import net.runelite.client.util.ImageUtil;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.lang.management.ManagementFactory;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Objects;
+import java.util.stream.Stream;
 
 @Slf4j
 @PluginDescriptor(
@@ -31,23 +37,38 @@ import java.util.Objects;
 )
 public class MaxSkillTrimPlugin extends Plugin
 {
-    private static final Trim maxLevelTrim = new Trim(-666, TrimType.MAX_LEVEL);
-    private static final Trim maxExperienceTrim = new Trim(-667, TrimType.MAX_EXPERIENCE);
-    private MaxSkillTrimPanel maxSkillTrimPanel;
+    private static final Trim maxLevelTrim = new Trim(-432432, TrimType.MAX_LEVEL);
+    private static final Trim maxExperienceTrim = new Trim(-432433, TrimType.MAX_EXPERIENCE);
     @Inject
     private MaxSkillTrimConfig maxSkillTrimConfig;
     private NavigationButton navButton;
     @Inject
     private ClientToolbar pluginToolbar;
-    public static final File MAXSKILLTRIMS_DIR = new File(RuneLite.RUNELITE_DIR.getPath() + File.separator + "max-skill-trims");
+    public static final File MAXSKILLTRIMS_DIR = new File(RuneLite.RUNELITE_DIR.getPath(), "max-skill-trims");
     private static final int SCRIPTID_STATS_INIT = 393;
+    private static final int SCRIPTID_STATS_REFRESH = 394;
     @Inject
     private Client client;
     @Inject
     private ClientThread clientThread;
     private Widget currentWidget;
-    private final Widget[] maxLevelTrimWidgets = new Widget[SkillData.values().length];
-    private final Widget[] maxExperienceTrimWidgets = new Widget[SkillData.values().length];
+
+    private boolean mockOverridesEnabled = false;
+
+    public void setMockOverridesEnabled(boolean enabled) {
+        this.mockOverridesEnabled = enabled;
+        clientThread.invokeLater(this::updateTrims);
+    }
+
+    private final HashMap<String, MaxSkillTrimWidget> maxSkillTrimWidgetHashMap = new HashMap<>();
+
+    private final List<Skill> skillsInLastRow = new ArrayList<Skill>(3) {
+        {
+            add(Skill.CONSTRUCTION);
+            add(Skill.SAILING);
+            add(Skill.HUNTER);
+        }
+    };
 
     @Provides
     MaxSkillTrimConfig provideConfig(ConfigManager configManager)
@@ -65,7 +86,7 @@ public class MaxSkillTrimPlugin extends Plugin
 
         addDefaultTrims();
 
-        maxSkillTrimPanel = injector.getInstance(MaxSkillTrimPanel.class);
+        MaxSkillTrimPanel maxSkillTrimPanel = injector.getInstance(MaxSkillTrimPanel.class);
 
         BufferedImage icon;
         synchronized (ImageIO.class)
@@ -97,114 +118,129 @@ public class MaxSkillTrimPlugin extends Plugin
     {
         pluginToolbar.removeNavigation(navButton);
         clientThread.invoke(() -> {
-            removeTrimWidgetContainers(maxLevelTrimWidgets);
-            removeTrimWidgetContainers(maxExperienceTrimWidgets);
+            removeTrimWidgetContainers(maxSkillTrimWidgetHashMap);
         });
     }
 
     @Subscribe
     public void onScriptPreFired(ScriptPreFired event) {
-        if (event.getScriptId() != SCRIPTID_STATS_INIT)	{
-            return;
+        if (event.getScriptId() == SCRIPTID_STATS_INIT || event.getScriptId() == SCRIPTID_STATS_REFRESH) {
+            Widget widget = event.getScriptEvent().getSource();
+
+            currentWidget = widget.getId() == InterfaceID.Stats.UNIVERSE ? null : widget;
         }
-        currentWidget = event.getScriptEvent().getSource();
     }
 
     @Subscribe
     public void onScriptPostFired(ScriptPostFired event) {
-        if (event.getScriptId() == SCRIPTID_STATS_INIT && currentWidget != null) {
+        if ((event.getScriptId() == SCRIPTID_STATS_INIT || event.getScriptId() == SCRIPTID_STATS_REFRESH) && currentWidget != null) {
             buildTrim(currentWidget);
         }
     }
 
     private void buildTrimWidgetContainers() {
-        Widget skillsContainer = client.getWidget(WidgetInfo.SKILLS_CONTAINER);
-        if (skillsContainer == null) {
-            return;
-        }
+        Widget skillsContainer = client.getWidget(InterfaceID.Stats.UNIVERSE);
+        if (skillsContainer == null) return;
 
         for (Widget skillTile : skillsContainer.getStaticChildren()) {
             buildTrim(skillTile);
         }
     }
 
-    private void removeTrimWidgetContainers(Widget[] trims) {
-        for(Widget trim: trims) {
-            if (trim == null) {
-                continue;
-            }
+    private void removeTrimWidgetContainers(HashMap<String, MaxSkillTrimWidget> trims) {
+        maxSkillTrimWidgetHashMap.values().removeIf(trim -> {
+            if(trim.widget != null) {
+                Widget[] children = trim.widget.getParent().getChildren();
 
-            Widget[] children = trim.getParent().getChildren();
-            for (int i = 0; i < children.length; i++) {
-                if (trim == children[i]) {
-                    children[i] = null;
+                if(children == null) {
+                    return true;
+                }
+
+                for (int i = 0; i < children.length; i++) {
+                    if (trim.widget == children[i]) {
+                        children[i] = null;
+                    }
                 }
             }
-        }
+            return true;
+        });
     }
 
     private void buildTrim(Widget parent) {
-        int idx = WidgetInfo.TO_CHILD(parent.getId()) - 1;
+        if(parent.getType() != WidgetType.LAYER) return;
+
+        int idx = (parent.getId() & 0xFFFF) - 1;
         SkillData skill = SkillData.get(idx);
-        if (skill == null) {
-            return;
+        if (skill == null) return;
+
+        MaxSkillTrimWidget maxLevel = maxSkillTrimWidgetHashMap.putIfAbsent(TrimType.MAX_LEVEL.name() + skill.name(), new MaxSkillTrimWidget(skill, TrimType.MAX_LEVEL, false, null));
+        if(maxLevel != null && maxLevel.widget == null) {
+            maxLevel.widget = createWidget(parent, skill, maxLevelTrim);
+            updateTrim(maxLevel);
         }
 
-        maxLevelTrimWidgets[idx] = createWidget(parent, skill, maxLevelTrim);
-        maxExperienceTrimWidgets[idx] = createWidget(parent, skill, maxExperienceTrim);
+        MaxSkillTrimWidget maxExp = maxSkillTrimWidgetHashMap.putIfAbsent(TrimType.MAX_EXPERIENCE.name() + skill.name(), new MaxSkillTrimWidget(skill, TrimType.MAX_EXPERIENCE, false, null));
+        if(maxExp != null && maxExp.widget == null) {
+            maxExp.widget = createWidget(parent, skill, maxExperienceTrim);
+            updateTrim(maxExp);
+        }
     }
 
     private Widget createWidget(Widget parent, SkillData skill, Trim trim) {
-        Widget t = parent.createChild(-1, WidgetType.GRAPHIC)
-                .setYPositionMode(WidgetPositionMode.ABSOLUTE_TOP)
-                .setOriginalHeight(parent.getOriginalHeight())
-                .setOriginalWidth(parent.getOriginalWidth())
+        boolean isSkillLastRow = skillsInLastRow.contains(skill.getSkill());
+
+        return parent.createChild(-1, WidgetType.GRAPHIC)
+                .setYPositionMode(isSkillLastRow ? WidgetPositionMode.ABSOLUTE_TOP + 1 : WidgetPositionMode.ABSOLUTE_TOP + 2)
+                .setXPositionMode(WidgetPositionMode.ABSOLUTE_LEFT + 1)
+                .setOriginalHeight(29)
+                .setOriginalWidth(60)
                 .setWidthMode(parent.getWidthMode())
                 .setHeightMode(parent.getHeightMode())
                 .setOpacity(255)
                 .setSpriteId(trim.spriteID)
-                .setHasListener(true);
-
-        JavaScriptCallback cb = ev -> updateTrim(skill, t, trim);
-        t.setOnVarTransmitListener(cb);
-
-        t.revalidate();
-
-        return t;
+                .setName("Max Skill Trim - " + trim.trimType + " - " + skill.getSkill().getName());
     }
 
-    private void updateTrim(SkillData skill, Widget widget, Trim trim) {
-        final int currentXP = client.getSkillExperience(skill.getSkill());
-        final boolean isMaxExperience =  currentXP >= Experience.MAX_SKILL_XP;
-        final int currentLevel = Experience.getLevelForXp(currentXP);
+    private void updateTrim(MaxSkillTrimWidget widget) {
+        int currentXP = client.getSkillExperience(widget.skillData.getSkill());
+        boolean isMaxExperience = currentXP >= Experience.MAX_SKILL_XP;
+        int currentLevel = Experience.getLevelForXp(currentXP);
 
-        switch(trim.trimType) {
-            case MAX_LEVEL:
-                if(!maxSkillTrimConfig.showMaxLevelTrim() || (isMaxExperience && maxSkillTrimConfig.getShowMaxExperienceTrim())) {
-                    widget.setOpacity(255);
-                } else if(currentLevel >= Experience.MAX_REAL_LEVEL) {
-                    widget.setOpacity(0);
-                }
-                break;
-            case MAX_EXPERIENCE:
-                if(!maxSkillTrimConfig.getShowMaxExperienceTrim()) {
-                    widget.setOpacity(255);
-                } else if(isMaxExperience) {
-                    widget.setOpacity(0);
-                }
-                break;
+        boolean showMaxLevelTrim = maxSkillTrimConfig.showMaxLevelTrim();
+        boolean showMaxExperienceTrim = maxSkillTrimConfig.getShowMaxExperienceTrim();
+
+        // Highest priority: developer mode with mock enabled
+        if (mockOverridesEnabled) {
+            widget.widget.setOpacity(widget.isMockEnabled ? 0 : 255);
+            return;
+        }
+
+        boolean maxExpActive = showMaxExperienceTrim && isMaxExperience;
+        boolean showTrim = false;
+
+        if (widget.trimType == TrimType.MAX_EXPERIENCE) {
+            showTrim = maxExpActive;
+        }
+
+        if (widget.trimType == TrimType.MAX_LEVEL) {
+            showTrim = !maxExpActive && showMaxLevelTrim && currentLevel >= Experience.MAX_REAL_LEVEL;
+        }
+
+        widget.widget.setOpacity(showTrim ? 0 : 255);
+    }
+
+    void setMockTrimState(SkillData skill, boolean isMockEnabled, TrimType trimType) {
+        MaxSkillTrimWidget widget = maxSkillTrimWidgetHashMap.get(trimType.name() + skill.name());
+        if (widget != null) {
+            widget.isMockEnabled = isMockEnabled;
+            updateTrim(widget);
         }
     }
 
     void updateTrims() {
-        for(int i = 0; i < maxLevelTrimWidgets.length; i++) {
-            updateTrim(SkillData.get(i), maxLevelTrimWidgets[i], maxLevelTrim);
+        for (MaxSkillTrimWidget widget : maxSkillTrimWidgetHashMap.values()) {
+            updateTrim(widget);
         }
-
-        for(int i = 0; i < maxExperienceTrimWidgets.length; i++) {
-            updateTrim(SkillData.get(i), maxExperienceTrimWidgets[i], maxExperienceTrim);
-        }
-
     }
 
     private void addDefaultTrims()
@@ -247,11 +283,14 @@ public class MaxSkillTrimPlugin extends Plugin
 
     public SpritePixels getSpritePixels(String filename)
     {
-        File spriteFile = new File(MAXSKILLTRIMS_DIR + File.separator + filename);
-        if (!spriteFile.exists())
-        {
-            log.debug("Sprite doesn't exist (" + spriteFile.getPath() + "): ");
-            return null;
+        File spriteFile = new File(MAXSKILLTRIMS_DIR, filename);
+        if (!spriteFile.exists()) {
+            log.debug("Sprite doesn't exist ({}): ", spriteFile.getPath());
+            spriteFile = new File(MAXSKILLTRIMS_DIR, "full-trim.png");
+            if (!spriteFile.exists()) {
+                log.debug("Fallback sprite doesn't exist ({}): ", spriteFile.getPath());
+                return null;
+            }
         }
         try
         {
@@ -263,7 +302,7 @@ public class MaxSkillTrimPlugin extends Plugin
         }
         catch (RuntimeException | IOException ex)
         {
-            log.debug("Unable to find image (" + spriteFile.getPath() + "): ");
+            log.debug("Unable to find image ({}): ", spriteFile.getPath());
         }
         return null;
     }
