@@ -24,6 +24,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
 import java.util.Objects;
 
 @Slf4j
@@ -52,6 +53,8 @@ public class MaxSkillTrimPlugin extends Plugin
     private SkillData lastSkillBuiltTrimFor;
     private final Widget[] maxLevelTrimWidgets = new Widget[SkillData.values().length];
     private final Widget[] maxExperienceTrimWidgets = new Widget[SkillData.values().length];
+    private static final String PROGRESS_BAR_PLUGIN_AUTHOR = "m0bilebtw";
+    private static final String PROGRESS_BAR_PLUGIN_NAME = "SkillsTabProgressBarsPlugin";
 
     @Provides
     MaxSkillTrimConfig provideConfig(ConfigManager configManager)
@@ -126,6 +129,7 @@ public class MaxSkillTrimPlugin extends Plugin
             && currentWidget != null
         ) {
             buildTrim(currentWidget);
+            moveProgressBarsToTop(currentWidget);
         }
     }
 
@@ -137,6 +141,7 @@ public class MaxSkillTrimPlugin extends Plugin
 
         for (Widget skillTile : skillsContainer.getStaticChildren()) {
             buildTrim(skillTile);
+            moveProgressBarsToTop(skillTile);
         }
     }
 
@@ -202,6 +207,48 @@ public class MaxSkillTrimPlugin extends Plugin
         t.revalidate();
 
         return t;
+    }
+
+    private Boolean isProgressBarWidget(Widget widget) {
+        final Object[] listeners;
+
+        try {
+            listeners = widget.getOnVarTransmitListener();
+        } catch (NullPointerException e) {
+            return false;
+        }
+
+        if (listeners == null) return false;
+
+        for (Object listener : listeners) {
+            if (listener == null) continue;
+
+            String s = listener.toString();
+            if (s.contains(PROGRESS_BAR_PLUGIN_AUTHOR) && s.contains(PROGRESS_BAR_PLUGIN_NAME)) return true;
+        }
+
+        return false;
+    }
+
+    private void moveProgressBarsToTop(Widget parent) {
+        Widget[] children = parent.getChildren();
+        if (children != null) {
+            // Separate progress bar widgets and other widgets into separate lists
+            ArrayList<Widget> progressBarWidgets = new ArrayList<Widget>();
+            ArrayList<Widget> otherWidgets = new ArrayList<Widget>();
+            for (Widget child : children) {
+                if (isProgressBarWidget(child)) {
+                    progressBarWidgets.add(child);
+                } else {
+                    otherWidgets.add(child);
+                }
+            }
+            // Recombine them with progress bar widgets at the end, which also preserves order
+            ArrayList<Widget> combinedWidgets = new ArrayList<Widget>(otherWidgets);
+            combinedWidgets.addAll(progressBarWidgets);
+            Widget[] reorderedChildren = combinedWidgets.toArray(new Widget[0]);
+            System.arraycopy(reorderedChildren, 0, children, 0, children.length);
+        }
     }
 
     private void updateTrim(SkillData skill, Widget widget, Trim trim) {
