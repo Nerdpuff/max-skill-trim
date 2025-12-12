@@ -7,15 +7,13 @@ import net.runelite.client.ui.PluginPanel;
 import net.runelite.client.util.LinkBrowser;
 
 import javax.inject.Inject;
+import javax.inject.Named;
 import javax.inject.Singleton;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ItemEvent;
 import java.io.File;
-import java.lang.management.ManagementFactory;
-import java.util.List;
 import java.util.Objects;
-import java.util.stream.Stream;
 
 @Slf4j
 @Singleton
@@ -25,7 +23,7 @@ public class MaxSkillTrimPanel extends PluginPanel
     ConfigManager configManager;
 
     @Inject
-    public MaxSkillTrimPanel(MaxSkillTrimConfig config, MaxSkillTrimPlugin plugin)
+    public MaxSkillTrimPanel(MaxSkillTrimConfig config, MaxSkillTrimPlugin plugin, @Named("developerMode") boolean developerMode)
     {
         JPanel container = new JPanel();
         container.setBackground(ColorScheme.DARK_GRAY_COLOR);
@@ -97,7 +95,7 @@ public class MaxSkillTrimPanel extends PluginPanel
         constraints.fill = GridBagConstraints.HORIZONTAL;
         container.add(maxExperienceComboBox, constraints);
 
-        if (isDeveloperMode()) addDeveloperSection(plugin, container);
+        if (developerMode) addDeveloperSection(plugin, container);
 
         add(container);
     }
@@ -112,9 +110,7 @@ public class MaxSkillTrimPanel extends PluginPanel
 
         GridBagConstraints buttonConstraints = new GridBagConstraints();
         JCheckBox enableOverridesCheckbox = new JCheckBox("Enable Overrides");
-        enableOverridesCheckbox.addActionListener(e -> {
-            plugin.setMockOverridesEnabled(enableOverridesCheckbox.isSelected());
-        });
+        enableOverridesCheckbox.addActionListener(e -> plugin.setMockOverridesEnabled(enableOverridesCheckbox.isSelected()));
         buttonConstraints.gridx = 0;
         buttonConstraints.gridy = 0;
         buttonConstraints.gridwidth = GridBagConstraints.REMAINDER;
@@ -136,17 +132,13 @@ public class MaxSkillTrimPanel extends PluginPanel
             // Max Level checkbox
             skillConstraints.gridx = 1;
             JCheckBox maxLevelToggle = new JCheckBox("ML");
-            maxLevelToggle.addActionListener(e -> {
-                plugin.setMockTrimState(skill, maxLevelToggle.isSelected(), TrimType.MAX_LEVEL);
-            });
+            maxLevelToggle.addActionListener(e -> plugin.setMockTrimState(skill, maxLevelToggle.isSelected(), TrimType.MAX_LEVEL));
             developerPanel.add(maxLevelToggle, skillConstraints);
 
             // Max Experience checkbox
             skillConstraints.gridx = 2;
             JCheckBox maxExpToggle = new JCheckBox("ME");
-            maxExpToggle.addActionListener(e -> {
-                plugin.setMockTrimState(skill, maxExpToggle.isSelected(), TrimType.MAX_EXPERIENCE);
-            });
+            maxExpToggle.addActionListener(e -> plugin.setMockTrimState(skill, maxExpToggle.isSelected(), TrimType.MAX_EXPERIENCE));
             developerPanel.add(maxExpToggle, skillConstraints);
         }
 
@@ -163,14 +155,6 @@ public class MaxSkillTrimPanel extends PluginPanel
         devConstraints.weightx = 1.0;
         devConstraints.weighty = 1.0;
         container.add(devPanel, devConstraints);
-    }
-
-    private boolean isDeveloperMode() {
-        // Check JVM args for '--developer-mode'
-        List<String> args = ManagementFactory.getRuntimeMXBean().getInputArguments();
-        String cmd = System.getProperty("sun.java.command", "");
-        return Stream.concat(args.stream(), Stream.of(cmd.split(" ")))
-                .anyMatch(s -> s.trim().equalsIgnoreCase("--developer-mode"));
     }
 
     private JComboBox<String> buildComboBoxPanel(String selectedTrimConfigKey, String selectedFilename) {
