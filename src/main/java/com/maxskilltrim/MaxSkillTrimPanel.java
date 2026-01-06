@@ -129,17 +129,10 @@ public class MaxSkillTrimPanel extends PluginPanel
             skillConstraints.gridy = i + 1;
             developerPanel.add(new JLabel(skill.name()), skillConstraints);
 
-            // Max Level checkbox
+            JComboBox<TrimType> overrideSelector = new JComboBox<>(new TrimType[]{null, TrimType.MAX_LEVEL, TrimType.MAX_EXPERIENCE});
             skillConstraints.gridx = 1;
-            JCheckBox maxLevelToggle = new JCheckBox("ML");
-            maxLevelToggle.addActionListener(e -> plugin.setMockTrimState(skill, maxLevelToggle.isSelected(), TrimType.MAX_LEVEL));
-            developerPanel.add(maxLevelToggle, skillConstraints);
-
-            // Max Experience checkbox
-            skillConstraints.gridx = 2;
-            JCheckBox maxExpToggle = new JCheckBox("ME");
-            maxExpToggle.addActionListener(e -> plugin.setMockTrimState(skill, maxExpToggle.isSelected(), TrimType.MAX_EXPERIENCE));
-            developerPanel.add(maxExpToggle, skillConstraints);
+            overrideSelector.addActionListener(e -> plugin.setMockTrimState(skill.getSkill(), (TrimType)overrideSelector.getSelectedItem()));
+            developerPanel.add(overrideSelector, skillConstraints);
         }
 
         JScrollPane scrollPane = new JScrollPane(developerPanel);

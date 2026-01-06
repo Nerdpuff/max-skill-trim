@@ -21,7 +21,6 @@ import net.runelite.client.util.ImageUtil;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
-import java.lang.management.ManagementFactory;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
@@ -29,7 +28,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Objects;
-import java.util.stream.Stream;
 
 @Slf4j
 @PluginDescriptor(
@@ -37,8 +35,8 @@ import java.util.stream.Stream;
 )
 public class MaxSkillTrimPlugin extends Plugin
 {
-    private static final Trim maxLevelTrim = new Trim(-432432, TrimType.MAX_LEVEL);
-    private static final Trim maxExperienceTrim = new Trim(-432433, TrimType.MAX_EXPERIENCE);
+    private static final Trim maxLevelTrim = new Trim(-432432);
+    private static final Trim maxExperienceTrim = new Trim(-432433);
     @Inject
     private MaxSkillTrimConfig maxSkillTrimConfig;
     private NavigationButton navButton;
@@ -60,7 +58,8 @@ public class MaxSkillTrimPlugin extends Plugin
         clientThread.invokeLater(this::updateTrims);
     }
 
-    private final HashMap<String, MaxSkillTrimWidget> maxSkillTrimWidgetHashMap = new HashMap<>();
+    private final HashMap<Skill, Widget> trimWidgets = new HashMap<>();
+    private final HashMap<Skill, Trim> trimOverrides = new HashMap<>();
 
     private final List<Skill> skillsInLastRow = new ArrayList<Skill>(3) {
         {
@@ -118,7 +117,7 @@ public class MaxSkillTrimPlugin extends Plugin
     {
         pluginToolbar.removeNavigation(navButton);
         clientThread.invoke(() -> {
-            removeTrimWidgetContainers(maxSkillTrimWidgetHashMap);
+            removeTrimWidgetContainers();
         });
     }
 
@@ -147,47 +146,69 @@ public class MaxSkillTrimPlugin extends Plugin
         }
     }
 
-    private void removeTrimWidgetContainers(HashMap<String, MaxSkillTrimWidget> trims) {
-        maxSkillTrimWidgetHashMap.values().removeIf(trim -> {
-            if(trim.widget != null) {
-                Widget[] children = trim.widget.getParent().getChildren();
+    private void removeTrimWidgetContainers() {
+        trimWidgets.values().forEach(trim -> {
+            Widget[] children = trim.getParent().getChildren();
 
-                if(children == null) {
-                    return true;
-                }
+            if(children == null) {
+                return;
+            }
 
-                for (int i = 0; i < children.length; i++) {
-                    if (trim.widget == children[i]) {
-                        children[i] = null;
-                    }
+            for (int i = 0; i < children.length; i++) {
+                if (trim == children[i]) {
+                    children[i] = null;
                 }
             }
-            return true;
         });
+        trimWidgets.clear();
     }
 
     private void buildTrim(Widget parent) {
         if(parent.getType() != WidgetType.LAYER) return;
 
         int idx = (parent.getId() & 0xFFFF) - 1;
-        SkillData skill = SkillData.get(idx);
-        if (skill == null) return;
+        SkillData skillData = SkillData.get(idx);
+        if (skillData == null) return;
+        Skill skill = skillData.getSkill();
 
-        MaxSkillTrimWidget maxLevel = maxSkillTrimWidgetHashMap.putIfAbsent(TrimType.MAX_LEVEL.name() + skill.name(), new MaxSkillTrimWidget(skill, TrimType.MAX_LEVEL, false, null));
-        if(maxLevel != null && maxLevel.widget == null) {
-            maxLevel.widget = createWidget(parent, skill, maxLevelTrim);
-            updateTrim(maxLevel);
-        }
+        if (!trimWidgets.containsKey(skill))
+            trimWidgets.put(skill, createWidget(parent, skill));
 
-        MaxSkillTrimWidget maxExp = maxSkillTrimWidgetHashMap.putIfAbsent(TrimType.MAX_EXPERIENCE.name() + skill.name(), new MaxSkillTrimWidget(skill, TrimType.MAX_EXPERIENCE, false, null));
-        if(maxExp != null && maxExp.widget == null) {
-            maxExp.widget = createWidget(parent, skill, maxExperienceTrim);
-            updateTrim(maxExp);
-        }
+        updateTrim(skill);
     }
 
-    private Widget createWidget(Widget parent, SkillData skill, Trim trim) {
-        boolean isSkillLastRow = skillsInLastRow.contains(skill.getSkill());
+    private void updateTrim(Skill skill)
+    {
+        Widget trimWidget = trimWidgets.getOrDefault(skill, null);
+
+        // Widgets have not been set up yet,
+        // safe to ignore this attempt to update as it will load directly into the correct state when ready
+        if (trimWidget == null)
+            return;
+
+        Trim trim = SelectTrim(skill);
+        if (trim == null)
+            trimWidget.setOpacity(255);
+        else
+            trimWidget.setOpacity(0).setSpriteId(trim.spriteID);
+    }
+
+    private Trim SelectTrim(Skill skill)
+    {
+        if (mockOverridesEnabled)
+            return trimOverrides.getOrDefault(skill, null);
+
+        if (maxSkillTrimConfig.getShowMaxExperienceTrim() && client.getSkillExperience(skill) >= Experience.MAX_SKILL_XP)
+            return maxExperienceTrim;
+
+        if (maxSkillTrimConfig.showMaxLevelTrim() && client.getRealSkillLevel(skill) >= Experience.MAX_REAL_LEVEL)
+            return maxLevelTrim;
+
+        return null;
+    }
+
+    private Widget createWidget(Widget parent, Skill skill) {
+        boolean isSkillLastRow = skillsInLastRow.contains(skill);
 
         return parent.createChild(-1, WidgetType.GRAPHIC)
                 .setYPositionMode(isSkillLastRow ? WidgetPositionMode.ABSOLUTE_TOP + 1 : WidgetPositionMode.ABSOLUTE_TOP + 2)
@@ -197,50 +218,32 @@ public class MaxSkillTrimPlugin extends Plugin
                 .setWidthMode(parent.getWidthMode())
                 .setHeightMode(parent.getHeightMode())
                 .setOpacity(255)
-                .setSpriteId(trim.spriteID)
-                .setName("Max Skill Trim - " + trim.trimType + " - " + skill.getSkill().getName());
+                .setName("Max Skill Trim - " + skill.getName());
     }
 
-    private void updateTrim(MaxSkillTrimWidget widget) {
-        int currentXP = client.getSkillExperience(widget.skillData.getSkill());
-        boolean isMaxExperience = currentXP >= Experience.MAX_SKILL_XP;
-        int currentLevel = Experience.getLevelForXp(currentXP);
 
-        boolean showMaxLevelTrim = maxSkillTrimConfig.showMaxLevelTrim();
-        boolean showMaxExperienceTrim = maxSkillTrimConfig.getShowMaxExperienceTrim();
+    void setMockTrimState(Skill skill, TrimType trimType) {
 
-        // Highest priority: developer mode with mock enabled
-        if (mockOverridesEnabled) {
-            widget.widget.setOpacity(widget.isMockEnabled ? 0 : 255);
-            return;
+        Trim trim = null;
+        if (trimType != null)
+        {
+            switch (trimType)
+            {
+                case MAX_LEVEL:
+                    trim = maxLevelTrim;
+                    break;
+                case MAX_EXPERIENCE:
+                    trim = maxExperienceTrim;
+                    break;
+            }
         }
-
-        boolean maxExpActive = showMaxExperienceTrim && isMaxExperience;
-        boolean showTrim = false;
-
-        if (widget.trimType == TrimType.MAX_EXPERIENCE) {
-            showTrim = maxExpActive;
-        }
-
-        if (widget.trimType == TrimType.MAX_LEVEL) {
-            showTrim = !maxExpActive && showMaxLevelTrim && currentLevel >= Experience.MAX_REAL_LEVEL;
-        }
-
-        widget.widget.setOpacity(showTrim ? 0 : 255);
-    }
-
-    void setMockTrimState(SkillData skill, boolean isMockEnabled, TrimType trimType) {
-        MaxSkillTrimWidget widget = maxSkillTrimWidgetHashMap.get(trimType.name() + skill.name());
-        if (widget != null) {
-            widget.isMockEnabled = isMockEnabled;
-            updateTrim(widget);
-        }
+        trimOverrides.put(skill, trim);
+        updateTrim(skill);
     }
 
     void updateTrims() {
-        for (MaxSkillTrimWidget widget : maxSkillTrimWidgetHashMap.values()) {
-            updateTrim(widget);
-        }
+        for (Skill skill : Skill.values())
+            updateTrim(skill);
     }
 
     private void addDefaultTrims()
