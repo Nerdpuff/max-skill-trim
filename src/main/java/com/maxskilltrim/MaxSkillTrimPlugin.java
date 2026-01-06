@@ -137,6 +137,19 @@ public class MaxSkillTrimPlugin extends Plugin
         }
     }
 
+    @Subscribe
+    public void onGameStateChanged(GameStateChanged event) {
+        switch (event.getGameState())
+        {
+            case LOGIN_SCREEN:
+                removeTrimWidgetContainers();
+                break;
+            case LOGGED_IN:
+                buildTrimWidgetContainers();
+                break;
+        }
+    }
+
     private void buildTrimWidgetContainers() {
         Widget skillsContainer = client.getWidget(InterfaceID.Stats.UNIVERSE);
         if (skillsContainer == null) return;
