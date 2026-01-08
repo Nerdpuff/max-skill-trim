@@ -8,10 +8,12 @@ import net.runelite.client.config.ConfigItem;
 public interface MaxSkillTrimConfig extends Config
 {
     String GROUP_NAME = "maxskilltrim";
+    String CONFIG_VERSION = "configVersion";
     String SHOW_MAX_LEVEL_TRIM = "showMaxLevelTrim";
     String SELECTED_MAX_LEVEL_TRIM = "selectedMaxLevelTrim";
     String SHOW_MAX_EXPERIENCE_TRIM = "showMaxExperienceTrim";
     String SELECTED_MAX_EXPERIENCE_TRIM = "selectedMaxExperienceTrim";
+    String TRIM_CONDITIONS = "trimConditions";
     String SHOW_NAV_BUTTON = "showNavButton";
 
     @ConfigItem(
@@ -51,9 +53,22 @@ public interface MaxSkillTrimConfig extends Config
     }
 
     @ConfigItem(
+            keyName = TRIM_CONDITIONS,
+            name = "Trim conditions",
+            description = "The conditions under which to apply trims",
+            hidden = true
+    )
+    default String getTrimConditions()
+    {
+        return "full-trim.png:" + UserCondition.DefaultCondition;
+    }
+
+    @ConfigItem(
             keyName = SHOW_NAV_BUTTON,
             name = "Show navigation button in sidebar?",
             description = "Toggles whether or not show the navigation button (icon) in the Runelite sidebar"
     )
     default boolean getShowNavButton() { return true; }
+
+
 }
