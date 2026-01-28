@@ -21,15 +21,11 @@ import net.runelite.client.util.ImageUtil;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
-import java.lang.management.ManagementFactory;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Objects;
-import java.util.stream.Stream;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Slf4j
 @PluginDescriptor(
@@ -37,14 +33,23 @@ import java.util.stream.Stream;
 )
 public class MaxSkillTrimPlugin extends Plugin
 {
-    private static final Trim maxLevelTrim = new Trim(-432432, TrimType.MAX_LEVEL);
-    private static final Trim maxExperienceTrim = new Trim(-432433, TrimType.MAX_EXPERIENCE);
+    private static final Trim[] dynamicTrims = new Trim[]{
+            new Trim(-432432), new Trim(-432433), new Trim(-432434), new Trim(-432435), new Trim(-432436),
+            new Trim(-432437), new Trim(-432438), new Trim(-432439), new Trim(-432440), new Trim(-432441),
+            new Trim(-432442), new Trim(-432443), new Trim(-432444), new Trim(-432445), new Trim(-432446),
+            new Trim(-432447), new Trim(-432448), new Trim(-432449), new Trim(-432450), new Trim(-432451),
+            new Trim(-432452) // 21 of them, one for each skill, the max amount of different trims you could display at once
+    };
+    @Inject
+    ConfigManager configManager;
+    
     @Inject
     private MaxSkillTrimConfig maxSkillTrimConfig;
     private NavigationButton navButton;
     @Inject
     private ClientToolbar pluginToolbar;
     public static final File MAXSKILLTRIMS_DIR = new File(RuneLite.RUNELITE_DIR.getPath(), "max-skill-trims");
+    private static final BufferedImage ICON_NAVBAR = ImageUtil.loadImageResource(MaxSkillTrimPlugin.class, "/icon_navbar.png");
     private static final int SCRIPTID_STATS_INIT = 393;
     private static final int SCRIPTID_STATS_REFRESH = 394;
     @Inject
@@ -52,15 +57,9 @@ public class MaxSkillTrimPlugin extends Plugin
     @Inject
     private ClientThread clientThread;
     private Widget currentWidget;
+    MaxSkillTrimPanel maxSkillTrimPanel;
 
-    private boolean mockOverridesEnabled = false;
-
-    public void setMockOverridesEnabled(boolean enabled) {
-        this.mockOverridesEnabled = enabled;
-        clientThread.invokeLater(this::updateTrims);
-    }
-
-    private final HashMap<String, MaxSkillTrimWidget> maxSkillTrimWidgetHashMap = new HashMap<>();
+    private final HashMap<Skill, Widget> trimWidgets = new HashMap<>();
 
     private final List<Skill> skillsInLastRow = new ArrayList<Skill>(3) {
         {
@@ -84,29 +83,21 @@ public class MaxSkillTrimPlugin extends Plugin
             MAXSKILLTRIMS_DIR.mkdirs();
         }
 
+        upgradeConfigIfNeeded();
         addDefaultTrims();
 
-        MaxSkillTrimPanel maxSkillTrimPanel = injector.getInstance(MaxSkillTrimPanel.class);
-
-        BufferedImage icon;
-        synchronized (ImageIO.class)
-        {
-            icon = ImageIO.read(Objects.requireNonNull(getClass().getResourceAsStream("/icon.png")));
-        }
+        maxSkillTrimPanel = injector.getInstance(MaxSkillTrimPanel.class);
 
         navButton = NavigationButton.builder()
                 .tooltip("Max Skill Trim")
                 .priority(5)
-                .icon(icon)
+                .icon(ICON_NAVBAR)
                 .panel(maxSkillTrimPanel)
                 .build();
 
         if(maxSkillTrimConfig.getShowNavButton()) {
             pluginToolbar.addNavigation(navButton);
         }
-
-        overrideSprites(maxLevelTrim, maxSkillTrimConfig.getSelectedMaxLevelTrimFilename());
-        overrideSprites(maxExperienceTrim, maxSkillTrimConfig.getSelectedMaxExperienceTrimFilename());
 
         if (client.getGameState() == GameState.LOGGED_IN) {
             clientThread.invoke(this::buildTrimWidgetContainers);
@@ -118,7 +109,7 @@ public class MaxSkillTrimPlugin extends Plugin
     {
         pluginToolbar.removeNavigation(navButton);
         clientThread.invoke(() -> {
-            removeTrimWidgetContainers(maxSkillTrimWidgetHashMap);
+            removeTrimWidgetContainers();
         });
     }
 
@@ -138,6 +129,25 @@ public class MaxSkillTrimPlugin extends Plugin
         }
     }
 
+    @Subscribe
+    public void onGameStateChanged(GameStateChanged event) {
+        switch (event.getGameState())
+        {
+            case LOGIN_SCREEN:
+                removeTrimWidgetContainers();
+                break;
+            case LOGGED_IN:
+                buildTrimWidgetContainers();
+                break;
+        }
+    }
+
+    @Subscribe
+    public void onStatChanged(StatChanged event)
+    {
+        updateTrim(event.getSkill());
+    }
+
     private void buildTrimWidgetContainers() {
         Widget skillsContainer = client.getWidget(InterfaceID.Stats.UNIVERSE);
         if (skillsContainer == null) return;
@@ -147,47 +157,53 @@ public class MaxSkillTrimPlugin extends Plugin
         }
     }
 
-    private void removeTrimWidgetContainers(HashMap<String, MaxSkillTrimWidget> trims) {
-        maxSkillTrimWidgetHashMap.values().removeIf(trim -> {
-            if(trim.widget != null) {
-                Widget[] children = trim.widget.getParent().getChildren();
-
-                if(children == null) {
-                    return true;
-                }
-
-                for (int i = 0; i < children.length; i++) {
-                    if (trim.widget == children[i]) {
-                        children[i] = null;
-                    }
-                }
-            }
-            return true;
-        });
+    private void removeTrimWidgetContainers() {
+        trimWidgets.values().forEach(Utils::detachWidget);
+        trimWidgets.clear();
     }
 
     private void buildTrim(Widget parent) {
         if(parent.getType() != WidgetType.LAYER) return;
 
         int idx = (parent.getId() & 0xFFFF) - 1;
-        SkillData skill = SkillData.get(idx);
-        if (skill == null) return;
+        SkillData skillData = SkillData.get(idx);
+        if (skillData == null) return;
+        Skill skill = skillData.getSkill();
 
-        MaxSkillTrimWidget maxLevel = maxSkillTrimWidgetHashMap.putIfAbsent(TrimType.MAX_LEVEL.name() + skill.name(), new MaxSkillTrimWidget(skill, TrimType.MAX_LEVEL, false, null));
-        if(maxLevel != null && maxLevel.widget == null) {
-            maxLevel.widget = createWidget(parent, skill, maxLevelTrim);
-            updateTrim(maxLevel);
-        }
+        if (!trimWidgets.containsKey(skill))
+            trimWidgets.put(skill, createWidget(parent, skill));
 
-        MaxSkillTrimWidget maxExp = maxSkillTrimWidgetHashMap.putIfAbsent(TrimType.MAX_EXPERIENCE.name() + skill.name(), new MaxSkillTrimWidget(skill, TrimType.MAX_EXPERIENCE, false, null));
-        if(maxExp != null && maxExp.widget == null) {
-            maxExp.widget = createWidget(parent, skill, maxExperienceTrim);
-            updateTrim(maxExp);
-        }
+        updateTrim(skill);
     }
 
-    private Widget createWidget(Widget parent, SkillData skill, Trim trim) {
-        boolean isSkillLastRow = skillsInLastRow.contains(skill.getSkill());
+    public void updateTrim(Skill skill)
+    {
+        Widget trimWidget = trimWidgets.getOrDefault(skill, null);
+
+        // Widgets have not been set up yet,
+        // safe to ignore this attempt to update as it will load directly into the correct state when ready
+        if (trimWidget == null)
+            return;
+
+        Trim trim = SelectTrim(skill);
+        if (trim == null)
+            trimWidget.setOpacity(255);
+        else
+            trimWidget.setOpacity(0).setSpriteId(trim.spriteID);
+    }
+
+    private Trim SelectTrim(Skill skill)
+    {
+        String trimFile = maxSkillTrimPanel.selectTrim(client, skill);
+
+        if (trimFile == null)
+            return null;
+
+        return trimForImage(trimFile);
+    }
+
+    private Widget createWidget(Widget parent, Skill skill) {
+        boolean isSkillLastRow = skillsInLastRow.contains(skill);
 
         return parent.createChild(-1, WidgetType.GRAPHIC)
                 .setYPositionMode(isSkillLastRow ? WidgetPositionMode.ABSOLUTE_TOP + 1 : WidgetPositionMode.ABSOLUTE_TOP + 2)
@@ -197,50 +213,12 @@ public class MaxSkillTrimPlugin extends Plugin
                 .setWidthMode(parent.getWidthMode())
                 .setHeightMode(parent.getHeightMode())
                 .setOpacity(255)
-                .setSpriteId(trim.spriteID)
-                .setName("Max Skill Trim - " + trim.trimType + " - " + skill.getSkill().getName());
-    }
-
-    private void updateTrim(MaxSkillTrimWidget widget) {
-        int currentXP = client.getSkillExperience(widget.skillData.getSkill());
-        boolean isMaxExperience = currentXP >= Experience.MAX_SKILL_XP;
-        int currentLevel = Experience.getLevelForXp(currentXP);
-
-        boolean showMaxLevelTrim = maxSkillTrimConfig.showMaxLevelTrim();
-        boolean showMaxExperienceTrim = maxSkillTrimConfig.getShowMaxExperienceTrim();
-
-        // Highest priority: developer mode with mock enabled
-        if (mockOverridesEnabled) {
-            widget.widget.setOpacity(widget.isMockEnabled ? 0 : 255);
-            return;
-        }
-
-        boolean maxExpActive = showMaxExperienceTrim && isMaxExperience;
-        boolean showTrim = false;
-
-        if (widget.trimType == TrimType.MAX_EXPERIENCE) {
-            showTrim = maxExpActive;
-        }
-
-        if (widget.trimType == TrimType.MAX_LEVEL) {
-            showTrim = !maxExpActive && showMaxLevelTrim && currentLevel >= Experience.MAX_REAL_LEVEL;
-        }
-
-        widget.widget.setOpacity(showTrim ? 0 : 255);
-    }
-
-    void setMockTrimState(SkillData skill, boolean isMockEnabled, TrimType trimType) {
-        MaxSkillTrimWidget widget = maxSkillTrimWidgetHashMap.get(trimType.name() + skill.name());
-        if (widget != null) {
-            widget.isMockEnabled = isMockEnabled;
-            updateTrim(widget);
-        }
+                .setName("Max Skill Trim - " + skill.getName());
     }
 
     void updateTrims() {
-        for (MaxSkillTrimWidget widget : maxSkillTrimWidgetHashMap.values()) {
-            updateTrim(widget);
-        }
+        for (Skill skill : Skill.values())
+            updateTrim(skill);
     }
 
     private void addDefaultTrims()
@@ -261,12 +239,6 @@ public class MaxSkillTrimPlugin extends Plugin
         if (event.getGroup().equals(MaxSkillTrimConfig.GROUP_NAME))
         {
             switch(event.getKey()) {
-                case MaxSkillTrimConfig.SELECTED_MAX_LEVEL_TRIM:
-                    overrideSprites(maxLevelTrim, event.getNewValue());
-                    break;
-                case MaxSkillTrimConfig.SELECTED_MAX_EXPERIENCE_TRIM:
-                    overrideSprites(maxExperienceTrim, event.getNewValue());
-                    break;
                 case MaxSkillTrimConfig.SHOW_MAX_EXPERIENCE_TRIM:
                 case MaxSkillTrimConfig.SHOW_MAX_LEVEL_TRIM:
                     clientThread.invokeLater(this::updateTrims);
@@ -307,6 +279,37 @@ public class MaxSkillTrimPlugin extends Plugin
         return null;
     }
 
+    Trim trimForImage(String filename)
+    {
+        for (Trim t : dynamicTrims)
+        {
+            if (t.imageFile.equals(filename))
+                return t;
+
+            if (t.imageFile.isEmpty())
+            {
+                overrideSprites(t, filename);
+                return t;
+            }
+        }
+
+        //Recover a now unused trim
+        Set<String> inUse = Arrays.stream(Skill.values())
+                .map(s -> maxSkillTrimPanel.selectTrim(client, s))
+                .collect(Collectors.toSet());
+
+        for (Trim t : dynamicTrims)
+        {
+            if (!inUse.contains(t.imageFile))
+            {
+                overrideSprites(t, filename);
+                return t;
+            }
+        }
+
+        throw new RuntimeException("Out of dynamic trims");
+    }
+
     void overrideSprites(Trim trim, String filename)
     {
         SpritePixels spritePixels = getSpritePixels(filename);
@@ -316,8 +319,60 @@ public class MaxSkillTrimPlugin extends Plugin
             return;
         }
 
+        log.info("Assigning trim " + filename + " to " + trim.spriteID);
+
         client.getSpriteOverrides().remove(trim.spriteID);
         client.getWidgetSpriteCache().reset();
         client.getSpriteOverrides().put(trim.spriteID, spritePixels);
+
+        trim.imageFile = filename;
+    }
+    
+    private void upgradeConfigIfNeeded()
+    {
+        int version = 0;
+        String versionValue = configManager.getConfiguration(MaxSkillTrimConfig.GROUP_NAME, MaxSkillTrimConfig.CONFIG_VERSION);
+        if (versionValue != null)
+            version = Integer.parseInt(versionValue);
+
+        final Integer CurrentVersion = 1;
+        if (version > CurrentVersion)
+            log.error("[Max Skill Trim] Config is from the future\nversion: " + versionValue + " is greater than current version: " + CurrentVersion + "\nconfig may not be read correctly\np.s. Can I have a go on your time machine? pretty please");
+
+        for (;version < CurrentVersion; version++)
+        {
+            switch (version)
+            {
+                case 0:
+                    upgradeConfigToV1();
+                    break;
+            }
+        }
+    }
+    
+    private void upgradeConfigToV1()
+    {
+        log.info("Upgrading " + MaxSkillTrimConfig.GROUP_NAME + " config to version 1");
+        String xpTrim = configManager.getConfiguration(MaxSkillTrimConfig.GROUP_NAME, MaxSkillTrimConfig.SELECTED_MAX_EXPERIENCE_TRIM);
+        String lvlTrim = configManager.getConfiguration(MaxSkillTrimConfig.GROUP_NAME, MaxSkillTrimConfig.SELECTED_MAX_LEVEL_TRIM);
+
+        // null-safe, default true, boolean check
+        boolean showXp = !"false".equals(configManager.getConfiguration(MaxSkillTrimConfig.GROUP_NAME, MaxSkillTrimConfig.SHOW_MAX_EXPERIENCE_TRIM));
+        boolean showLvl = !"false".equals(configManager.getConfiguration(MaxSkillTrimConfig.GROUP_NAME, MaxSkillTrimConfig.SHOW_MAX_LEVEL_TRIM));
+
+        // Lvl hid xp so no need to migrate that setting
+        if (showLvl && xpTrim.equals(lvlTrim))
+            showXp = false;
+
+        String trimConditions = "";
+
+        if (showXp)
+            trimConditions += xpTrim + ":xp >= 200m;";
+
+        if (showLvl)
+            trimConditions += lvlTrim + ":Level >= 99;";
+
+        configManager.setConfiguration(MaxSkillTrimConfig.GROUP_NAME, MaxSkillTrimConfig.TRIM_CONDITIONS, trimConditions);
+        configManager.setConfiguration(MaxSkillTrimConfig.GROUP_NAME, MaxSkillTrimConfig.CONFIG_VERSION, "1");
     }
 }
