@@ -152,9 +152,54 @@ public class TrimWithCondition extends JPanel
                 parent.revalidate();
                 parent.repaint();
             }
-        });
+        }));
 
-        menu.add(delete);
+        menu.add(new JMenuItem(new AbstractAction("Increase priority") {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                Container parent = self.getParent();
+                List<Component> siblings = Arrays.asList(parent.getComponents());
+                int index = siblings.indexOf(self);
+
+                if (index < 1)
+                    return;
+
+                Collections.swap(siblings, index, index - 1);
+
+                parent.removeAll();
+                for (Component c : siblings)
+                    parent.add(c);
+
+                onChange.run();
+
+                parent.revalidate();
+                parent.revalidate();
+            }
+        }));
+
+        menu.add(new JMenuItem(new AbstractAction("Decrease priority") {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                Container parent = self.getParent();
+                List<Component> siblings = Arrays.asList(parent.getComponents());
+                int index = siblings.indexOf(self);
+
+                if (index >= siblings.size() - 1)
+                    return;
+
+                Collections.swap(siblings, index, index + 1);
+
+                parent.removeAll();
+                for (Component c : siblings)
+                    parent.add(c);
+
+                onChange.run();
+
+                parent.revalidate();
+                parent.revalidate();
+            }
+        }));
+
         addMouseListener(new MouseListener() {
             @Override
             public void mouseClicked(MouseEvent e) {
