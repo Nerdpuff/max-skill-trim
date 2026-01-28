@@ -3,6 +3,7 @@ package com.maxskilltrim;
 import com.formdev.flatlaf.ui.FlatBorder;
 import net.runelite.api.Client;
 import net.runelite.api.Skill;
+import net.runelite.client.ui.DynamicGridLayout;
 
 import javax.imageio.ImageIO;
 import javax.swing.*;
@@ -18,6 +19,8 @@ import java.awt.event.MouseListener;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import java.util.function.Consumer;
 
 public class TrimWithCondition extends JPanel
@@ -62,14 +65,56 @@ public class TrimWithCondition extends JPanel
 
     private void Setup()
     {
+        JPopupMenu skillSelectorMenu = new JPopupMenu();
+        skillSelectorMenu.setLayout(new DynamicGridLayout(8, 3));
+        skillSelectorMenu.setMaximumSize(new Dimension(300, 1000));
+
+        for (Skill skill : Skill.values())
+        {
+            JCheckBox box = new JCheckBox(skill.getName());
+            box.setSelected(condition.appliesTo.contains(skill));
+            box.setAlignmentX(LEFT_ALIGNMENT);
+            box.addActionListener(new AbstractAction() {
+                @Override
+                public void actionPerformed(ActionEvent e) {
+                    if (box.isSelected())
+                        condition.appliesTo.add(skill);
+                    else
+                        condition.appliesTo.remove(skill);
+
+                    onChange.run();
+                }
+            });
+
+            skillSelectorMenu.add(box);
+        }
+
+        skillSelectorMenu.add(new JMenuItem("Done"));
+
         setLayout(new BorderLayout());
         setBorder(new CompoundBorder(new EmptyBorder(0,0,1, 0), new LineBorder(Color.darkGray)));
 
-        JPanel header = new JPanel(new BorderLayout());
+        JPanel header = new JPanel();
+        header.setLayout(new BoxLayout(header, BoxLayout.X_AXIS));
+        header.setBorder(new EmptyBorder(0, 1, 0, 1));
 
         JLabel title = new JLabel(name);
         title.setBorder(new EmptyBorder(1,1,1,1));
         header.add(title, BorderLayout.LINE_START);
+
+        header.add(new SpaceSponge(1000, 0));
+
+        JButton skillSelector = new JButton();
+        skillSelector.setText("Skills");
+        skillSelector.setHorizontalAlignment(JButton.LEFT);
+        skillSelector.addActionListener(new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                skillSelectorMenu.show(skillSelector, 0,skillSelector.getHeight());
+            }
+        });
+        skillSelector.setAlignmentX(RIGHT_ALIGNMENT);
+        header.add(skillSelector, BorderLayout.LINE_END);
 
         JCheckBox enabledBox = new JCheckBox( "", enabled);
         enabledBox.addActionListener((e) -> { this.enabled = enabledBox.isSelected(); this.onChange.run(); });
@@ -98,10 +143,7 @@ public class TrimWithCondition extends JPanel
         final JPanel self = this;
 
         JPopupMenu menu = new JPopupMenu();
-        JMenuItem delete = new JMenuItem();
-
-        delete.setText("Delete");
-        delete.addActionListener(new AbstractAction() {
+        menu.add(new JMenuItem(new AbstractAction("Delete") {
             @Override
             public void actionPerformed(ActionEvent e) {
                 Container parent = self.getParent();
@@ -116,28 +158,21 @@ public class TrimWithCondition extends JPanel
         addMouseListener(new MouseListener() {
             @Override
             public void mouseClicked(MouseEvent e) {
-                menu.show(self, e.getX(), e.getY());
+                if (e.getButton() == MouseEvent.BUTTON3) // Right-click
+                    menu.show(self, e.getX(), e.getY());
             }
 
             @Override
-            public void mousePressed(MouseEvent e) {
-
-            }
+            public void mousePressed(MouseEvent e) {}
 
             @Override
-            public void mouseReleased(MouseEvent e) {
-
-            }
+            public void mouseReleased(MouseEvent e) {}
 
             @Override
-            public void mouseEntered(MouseEvent e) {
-
-            }
+            public void mouseEntered(MouseEvent e) {}
 
             @Override
-            public void mouseExited(MouseEvent e) {
-
-            }
+            public void mouseExited(MouseEvent e) {}
         });
     }
 

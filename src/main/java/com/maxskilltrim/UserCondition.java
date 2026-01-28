@@ -4,9 +4,9 @@ import net.runelite.api.Client;
 import net.runelite.api.Skill;
 
 import javax.swing.*;
-import java.util.Arrays;
-import java.util.Enumeration;
+import java.util.*;
 import java.util.concurrent.locks.Condition;
+import java.util.stream.Collectors;
 
 public class UserCondition extends JPanel
 {
@@ -15,30 +15,49 @@ public class UserCondition extends JPanel
     public static String[] Keys = new String[]{ "Level", "Curr", "xp" };
     public static String DefaultCondition = "Level = 99";
 
-
     public String left;
     public String operator;
     public String right;
+
+    public List<Skill> appliesTo = new ArrayList<>();
 
     public UserCondition(String rawString)
     {
         String[] parts = rawString.split(" ");
 
-        if (parts.length != 3)
-            throw new IllegalArgumentException("[" + rawString + "] should be three parts was " + parts.length);
+        if (parts.length < 3)
+            throw new IllegalArgumentException("[" + rawString + "] should be at least three parts was " + parts.length);
 
         left = parts[0];
         operator = parts[1];
         right = parts[2];
+
+        Arrays.stream(parts)
+                .skip(3)
+                .map(s -> {
+                   try
+                   {
+                       return Skill.valueOf(s);
+                   }
+                   catch (Exception e)
+                   {
+                       return null;
+                   }
+                })
+                .filter(Objects::nonNull)
+                .forEach(s -> appliesTo.add(s));
     }
 
     public String toString()
     {
-        return left + " " + operator + " " + right;
+        return left + " " + operator + " " + right + appliesTo.stream().map(s -> " " + s).collect(Collectors.joining());
     }
 
     public boolean Eval(Client client, Skill skill)
     {
+        if (!appliesTo.isEmpty() && !appliesTo.contains(skill))
+            return false;
+
         int l;
         int r;
 
