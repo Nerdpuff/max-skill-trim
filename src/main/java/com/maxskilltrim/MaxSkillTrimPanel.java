@@ -184,7 +184,7 @@ public class MaxSkillTrimPanel extends PluginPanel
 
         for (File f : Objects.requireNonNull(MaxSkillTrimPlugin.MAXSKILLTRIMS_DIR.listFiles()))
         {
-            if (f.getName().equals("desktop.ini") { continue; } // If Windows adds desktop.ini to the folder, don't add it to the box
+            if (f.getName().equals("desktop.ini")) { continue; } // If Windows adds desktop.ini to the folder, don't add it to the box
             comboBox.addItem(f.getName());
         }
 
