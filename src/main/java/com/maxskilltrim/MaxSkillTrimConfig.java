@@ -19,7 +19,8 @@ public interface MaxSkillTrimConfig extends Config
     @ConfigItem(
             keyName = SHOW_MAX_LEVEL_TRIM,
             name = "Show trims on level 99 skills?",
-            description = "Toggles whether or not show skill trims on level 99 skills"
+            description = "Toggles whether or not show skill trims on level 99 skills",
+            hidden = true
     )
     default boolean showMaxLevelTrim() { return true; }
 
@@ -37,7 +38,8 @@ public interface MaxSkillTrimConfig extends Config
     @ConfigItem(
             keyName = SHOW_MAX_EXPERIENCE_TRIM,
             name = "Show trims on 200m skills?",
-            description = "Toggles whether or not show skill trims on 200m skills"
+            description = "Toggles whether or not show skill trims on 200m skills",
+            hidden = true
     )
     default boolean getShowMaxExperienceTrim() { return true; }
 
