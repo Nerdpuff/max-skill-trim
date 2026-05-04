@@ -1,6 +1,9 @@
 package com.maxskilltrim;
 
 import lombok.extern.slf4j.Slf4j;
+import net.runelite.api.Client;
+import net.runelite.api.HashTable;
+import net.runelite.api.Skill;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.PluginPanel;
@@ -13,7 +16,10 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ItemEvent;
 import java.io.File;
-import java.util.Objects;
+import java.util.*;
+import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Slf4j
 @Singleton
@@ -22,9 +28,17 @@ public class MaxSkillTrimPanel extends PluginPanel
     @Inject
     ConfigManager configManager;
 
+    MaxSkillTrimPlugin plugin;
+
+    JPanel conditionsPanel = new JPanel();
+
+    boolean overridesEnabled = false;
+    Hashtable<Skill, String> overrides = new Hashtable<>();
+
     @Inject
     public MaxSkillTrimPanel(MaxSkillTrimConfig config, MaxSkillTrimPlugin plugin, @Named("developerMode") boolean developerMode)
     {
+        this.plugin = plugin;
         JPanel container = new JPanel();
         container.setBackground(ColorScheme.DARK_GRAY_COLOR);
         GridBagLayout layout = new GridBagLayout();
@@ -32,9 +46,6 @@ public class MaxSkillTrimPanel extends PluginPanel
         constraints.anchor = GridBagConstraints.LINE_START;
         constraints.insets = new Insets(3, 3, 3, 3);
         container.setLayout(layout);
-
-        JComboBox<String> maxLevelComboBox = buildComboBoxPanel(MaxSkillTrimConfig.SELECTED_MAX_LEVEL_TRIM, config.getSelectedMaxLevelTrimFilename());
-        JComboBox<String> maxExperienceComboBox = buildComboBoxPanel(MaxSkillTrimConfig.SELECTED_MAX_EXPERIENCE_TRIM, config.getSelectedMaxExperienceTrimFilename());
 
         JButton openFolderButton = new JButton("Open Folder");
         openFolderButton.addActionListener(e ->
@@ -54,8 +65,7 @@ public class MaxSkillTrimPanel extends PluginPanel
 
         JButton refreshButton = new JButton("Refresh");
         refreshButton.addActionListener((ev) -> {
-            refreshComboBoxOptions(maxLevelComboBox);
-            refreshComboBoxOptions(maxExperienceComboBox);
+            refreshConditions(config.getTrimConditions());
         });
         constraints.gridx = 1;
         constraints.gridy = 0;
@@ -69,38 +79,21 @@ public class MaxSkillTrimPanel extends PluginPanel
         constraints.fill = GridBagConstraints.HORIZONTAL;
         container.add(getMoreTrimsButton, constraints);
 
-        JLabel maxLevelTrimLabel = new JLabel("Max level trim");
+        conditionsPanel.setLayout(new BoxLayout(conditionsPanel, BoxLayout.Y_AXIS));
+
         constraints.gridx = 0;
         constraints.gridy = 2;
         constraints.gridwidth = GridBagConstraints.REMAINDER;
         constraints.fill = GridBagConstraints.HORIZONTAL;
-        container.add(maxLevelTrimLabel, constraints);
+        container.add(conditionsPanel, constraints);
 
-        constraints.gridx = 0;
-        constraints.gridy = 3;
-        constraints.gridwidth = GridBagConstraints.REMAINDER;
-        constraints.fill = GridBagConstraints.HORIZONTAL;
-        container.add(maxLevelComboBox, constraints);
-
-        JLabel maxExperienceTrimLabel = new JLabel("Max experience trim");
-        constraints.gridx = 0;
-        constraints.gridy = 4;
-        constraints.gridwidth = GridBagConstraints.REMAINDER;
-        constraints.fill = GridBagConstraints.HORIZONTAL;
-        container.add(maxExperienceTrimLabel, constraints);
-
-        constraints.gridx = 0;
-        constraints.gridy = 5;
-        constraints.gridwidth = GridBagConstraints.REMAINDER;
-        constraints.fill = GridBagConstraints.HORIZONTAL;
-        container.add(maxExperienceComboBox, constraints);
-
-        if (developerMode) addDeveloperSection(plugin, container);
+        if (developerMode) addDeveloperSection(container);
 
         add(container);
+        refreshConditions(config.getTrimConditions());
     }
 
-    private static void addDeveloperSection(MaxSkillTrimPlugin plugin, JPanel container) {
+    private void addDeveloperSection(JPanel container) {
         JPanel devPanel = new JPanel();
         devPanel.setLayout(new BoxLayout(devPanel, BoxLayout.Y_AXIS));
         devPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
@@ -110,7 +103,11 @@ public class MaxSkillTrimPanel extends PluginPanel
 
         GridBagConstraints buttonConstraints = new GridBagConstraints();
         JCheckBox enableOverridesCheckbox = new JCheckBox("Enable Overrides");
-        enableOverridesCheckbox.addActionListener(e -> plugin.setMockOverridesEnabled(enableOverridesCheckbox.isSelected()));
+        enableOverridesCheckbox.addActionListener(e ->
+        {
+            this.overridesEnabled = enableOverridesCheckbox.isSelected();
+            plugin.updateTrims();
+        });
         buttonConstraints.gridx = 0;
         buttonConstraints.gridy = 0;
         buttonConstraints.gridwidth = GridBagConstraints.REMAINDER;
@@ -129,17 +126,20 @@ public class MaxSkillTrimPanel extends PluginPanel
             skillConstraints.gridy = i + 1;
             developerPanel.add(new JLabel(skill.name()), skillConstraints);
 
-            // Max Level checkbox
+            JComboBox<String> overrideSelector = new JComboBox<>();
             skillConstraints.gridx = 1;
-            JCheckBox maxLevelToggle = new JCheckBox("ML");
-            maxLevelToggle.addActionListener(e -> plugin.setMockTrimState(skill, maxLevelToggle.isSelected(), TrimType.MAX_LEVEL));
-            developerPanel.add(maxLevelToggle, skillConstraints);
+            overrideSelector.addActionListener(e ->
+            {
+                overrides.put(skill.getSkill(), (String)overrideSelector.getSelectedItem());
+                plugin.updateTrim(skill.getSkill());
+            });
 
-            // Max Experience checkbox
-            skillConstraints.gridx = 2;
-            JCheckBox maxExpToggle = new JCheckBox("ME");
-            maxExpToggle.addActionListener(e -> plugin.setMockTrimState(skill, maxExpToggle.isSelected(), TrimType.MAX_EXPERIENCE));
-            developerPanel.add(maxExpToggle, skillConstraints);
+            overrideSelector.addItem(null);
+
+            for (File f : Objects.requireNonNull(MaxSkillTrimPlugin.MAXSKILLTRIMS_DIR.listFiles()))
+                overrideSelector.addItem(f.getName());
+
+            developerPanel.add(overrideSelector, skillConstraints);
         }
 
         JScrollPane scrollPane = new JScrollPane(developerPanel);
@@ -149,7 +149,7 @@ public class MaxSkillTrimPanel extends PluginPanel
 
         GridBagConstraints devConstraints = new GridBagConstraints();
         devConstraints.gridx = 0;
-        devConstraints.gridy = 6;
+        devConstraints.gridy = 3;
         devConstraints.gridwidth = GridBagConstraints.REMAINDER;
         devConstraints.fill = GridBagConstraints.BOTH;
         devConstraints.weightx = 1.0;
@@ -157,36 +157,62 @@ public class MaxSkillTrimPanel extends PluginPanel
         container.add(devPanel, devConstraints);
     }
 
-    private JComboBox<String> buildComboBoxPanel(String selectedTrimConfigKey, String selectedFilename) {
-        JComboBox<String> comboBox = new JComboBox<>();
+    public String selectTrim(Client client, Skill skill)
+    {
+        if (overridesEnabled)
+            return overrides.getOrDefault(skill, null);
 
-        // Forces long item names to not cause the JPanel to overflow.
-        comboBox.setPrototypeDisplayValue("");
-
-        refreshComboBoxOptions(comboBox);
-
-        comboBox.addItemListener((e) -> {
-            if (e.getStateChange() == ItemEvent.SELECTED && configManager != null)
-            {
-                configManager.setConfiguration(MaxSkillTrimConfig.GROUP_NAME, selectedTrimConfigKey, e.getItem());
-            }
-        });
-
-        comboBox.setSelectedItem(selectedFilename);
-
-        return comboBox;
+        return Arrays.stream(conditionsPanel.getComponents())
+                .filter(c -> c.getClass() == TrimWithCondition.class)
+                .map(c -> (TrimWithCondition)c)
+                .filter(c -> c.enabled)
+                .filter(c -> c.IsActive(client, skill))
+                .map(c -> c.name)
+                .findFirst()
+                .orElse(null);
     }
 
-    private void refreshComboBoxOptions(JComboBox<String> comboBox)
+    private void changed()
     {
-        Object selectedItem = comboBox.getSelectedItem();
-        comboBox.removeAllItems();
+        saveConditions();
+        plugin.updateTrims();
+    }
 
-        for (File f : Objects.requireNonNull(MaxSkillTrimPlugin.MAXSKILLTRIMS_DIR.listFiles()))
+    private void saveConditions()
+    {
+        if (configManager == null)
+            return;
+
+        String baked =  Arrays.stream(conditionsPanel.getComponents())
+                        .filter(c -> c.getClass() == TrimWithCondition.class)
+                        .map(c -> (TrimWithCondition)c)
+                        .map(TrimWithCondition::Serialize)
+                        .collect(Collectors.joining(";"));
+
+        configManager.setConfiguration(MaxSkillTrimConfig.GROUP_NAME, MaxSkillTrimConfig.TRIM_CONDITIONS, baked);
+    }
+
+    private void refreshConditions(String trimConditionConfig)
+    {
+        conditionsPanel.removeAll();
+
+        Set<String> oldFiles = Arrays.stream(trimConditionConfig
+                        .split(";"))
+                        .map(s -> new TrimWithCondition(this::changed, s))
+                        .map((saved) -> {
+                            conditionsPanel.add(saved);
+                            return saved.name;
+                        }).collect(Collectors.toSet());
+
+        for (File newFile : Objects.requireNonNull(MaxSkillTrimPlugin.MAXSKILLTRIMS_DIR.listFiles()))
         {
-            comboBox.addItem(f.getName());
+            if (oldFiles.contains(newFile.getName()))
+                continue;
+
+            conditionsPanel.add(new TrimWithCondition(this::changed, newFile));
         }
 
-        comboBox.setSelectedItem(selectedItem);
+        conditionsPanel.revalidate();
+        conditionsPanel.repaint();
     }
 }

@@ -3,11 +3,11 @@ package com.maxskilltrim;
 public class Trim
 {
     public int spriteID;
-    public TrimType trimType;
+    public String imageFile;
 
-    public Trim(int spriteId, TrimType trimType) {
+    public Trim(int spriteId) {
         this.spriteID = spriteId;
-        this.trimType = trimType;
+        this.imageFile = "";
     }
 }
 
