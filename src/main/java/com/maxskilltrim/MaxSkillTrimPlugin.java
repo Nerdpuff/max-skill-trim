@@ -130,19 +130,6 @@ public class MaxSkillTrimPlugin extends Plugin
     }
 
     @Subscribe
-    public void onGameStateChanged(GameStateChanged event) {
-        switch (event.getGameState())
-        {
-            case LOGIN_SCREEN:
-                removeTrimWidgetContainers();
-                break;
-            case LOGGED_IN:
-                buildTrimWidgetContainers();
-                break;
-        }
-    }
-
-    @Subscribe
     public void onStatChanged(StatChanged event)
     {
         updateTrim(event.getSkill());
