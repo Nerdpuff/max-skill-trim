@@ -76,7 +76,7 @@ public class MaxSkillTrimPlugin extends Plugin
     }
 
     @Override
-    protected void startUp() throws Exception
+    protected void startUp()
     {
         if (!MAXSKILLTRIMS_DIR.exists())
         {
@@ -106,7 +106,7 @@ public class MaxSkillTrimPlugin extends Plugin
     }
 
     @Override
-    protected void shutDown() throws Exception
+    protected void shutDown()
     {
         pluginToolbar.removeNavigation(navButton);
         clientThread.invoke(this::removeTrimWidgetContainers);
