@@ -327,7 +327,7 @@ public class MaxSkillTrimPlugin extends Plugin
         if (versionValue != null)
             version = Integer.parseInt(versionValue);
 
-        final Integer CurrentVersion = 1;
+        final int CurrentVersion = 1;
         if (version > CurrentVersion)
             log.error("[Max Skill Trim] Config is from the future\nversion: " + versionValue + " is greater than current version: " + CurrentVersion + "\nconfig may not be read correctly\np.s. Can I have a go on your time machine? pretty please");
 
