@@ -108,9 +108,7 @@ public class MaxSkillTrimPlugin extends Plugin
     protected void shutDown() throws Exception
     {
         pluginToolbar.removeNavigation(navButton);
-        clientThread.invoke(() -> {
-            removeTrimWidgetContainers();
-        });
+        clientThread.invoke(this::removeTrimWidgetContainers);
     }
 
     @Subscribe
