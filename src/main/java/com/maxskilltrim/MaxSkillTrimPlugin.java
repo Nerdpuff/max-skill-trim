@@ -312,8 +312,6 @@ public class MaxSkillTrimPlugin extends Plugin
             return;
         }
 
-        log.info("Assigning trim " + filename + " to " + trim.spriteID);
-
         client.getSpriteOverrides().remove(trim.spriteID);
         client.getWidgetSpriteCache().reset();
         client.getSpriteOverrides().put(trim.spriteID, spritePixels);
