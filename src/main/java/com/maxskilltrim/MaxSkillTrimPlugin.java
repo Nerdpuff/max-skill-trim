@@ -170,8 +170,12 @@ public class MaxSkillTrimPlugin extends Plugin
         if (skillData == null) return;
         Skill skill = skillData.getSkill();
 
-        if (!trimWidgets.containsKey(skill))
-            trimWidgets.put(skill, createWidget(parent, skill));
+        if (trimWidgets.containsKey(skill))
+        {
+            Utils.detachWidget(trimWidgets.get(skill));
+            trimWidgets.remove(skill);
+        }
+        trimWidgets.put(skill, createWidget(parent, skill));
 
         updateTrim(skill);
     }
@@ -190,6 +194,8 @@ public class MaxSkillTrimPlugin extends Plugin
             trimWidget.setOpacity(255);
         else
             trimWidget.setOpacity(0).setSpriteId(trim.spriteID);
+
+        trimWidget.revalidate();
     }
 
     private Trim SelectTrim(Skill skill)
