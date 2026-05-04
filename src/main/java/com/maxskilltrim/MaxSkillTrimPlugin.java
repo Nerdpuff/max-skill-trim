@@ -80,7 +80,8 @@ public class MaxSkillTrimPlugin extends Plugin
     {
         if (!MAXSKILLTRIMS_DIR.exists())
         {
-            MAXSKILLTRIMS_DIR.mkdirs();
+            if (!MAXSKILLTRIMS_DIR.mkdirs())
+                log.error("Failed to create trims directory");
         }
 
         upgradeConfigIfNeeded();
