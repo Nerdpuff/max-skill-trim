@@ -241,6 +241,7 @@ public class MaxSkillTrimPlugin extends Plugin
             switch(event.getKey()) {
                 case MaxSkillTrimConfig.SHOW_MAX_EXPERIENCE_TRIM:
                 case MaxSkillTrimConfig.SHOW_MAX_LEVEL_TRIM:
+                case MaxSkillTrimConfig.TRIM_CONDITIONS:
                     clientThread.invokeLater(this::updateTrims);
                     break;
                 case MaxSkillTrimConfig.SHOW_NAV_BUTTON:
