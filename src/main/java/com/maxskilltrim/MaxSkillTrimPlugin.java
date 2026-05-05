@@ -181,7 +181,7 @@ public class MaxSkillTrimPlugin extends Plugin
         else
             trimWidget.setOpacity(0).setSpriteId(trim.spriteID);
 
-        trimWidget.revalidate();
+        clientThread.invoke(trimWidget::revalidate);
     }
 
     private Trim SelectTrim(Skill skill)
