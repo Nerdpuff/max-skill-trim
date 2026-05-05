@@ -8,6 +8,10 @@ Look at branch [custom trims](https://github.com/NathanQuayle/max-skill-trim/tre
 
 ## Installing custom trims
 
+Any image can be used as a trim.  
+You can find a lot of premade trims [here](https://nerdpuff.github.io/max-skill-trim/)
+
+To install:    
 Drop the trim image file into the trims folder, which can be opened from the side-panel.  
 Refresh from the side-panel or restart runelite.  
 New trims start out as disabled, enable them by checking the box in the top right of their configuration  
@@ -18,8 +22,6 @@ New trims start out as disabled, enable them by checking the box in the top righ
 You can customize when a trim is applied by changing condition expression on the bottom.  
 It is made up of three parts:
 #### Left
-Can only be one of:
-
 | Value   | defition                                |  
 |---------|-----------------------------------------|  
 | `Level` | Real level (bottom right number)        |  
@@ -39,10 +41,10 @@ Can only be one of:
 
 #### Right
 
-Can be one of the same values as left or a number.  
+Can be the same values as the left side or a number.    
 Supports suffixes e.g. `200m` `150k` `99` `92`  etc 
 
-There is also a secret only partially supported `Base` which is the lowest real level among your skills.  
+There is also a secret (only partially supported) `Base` which is the lowest real level among your skills.  
 For example `Level = Base` would highlight your lowest level skill
 
 ## Screenshots
