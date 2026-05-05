@@ -20,8 +20,8 @@ New trims start out as disabled, enable them by checking the box in the top righ
 
 ## Customizing conditions
 
-You can customize when a trim is applied by changing condition expression on the bottom.  
-It is made up of three parts:
+You can customize when a trim is applied by changing the condition expression on the bottom.  
+### The condition is made up of three parts:
 #### Left
 | Value   | defition                                |  
 |---------|-----------------------------------------|  
@@ -30,7 +30,6 @@ It is made up of three parts:
 | `xp`    | Amount of xp in the skill               |  
 
 #### Operator
-
 | Value | defition         |  
 |-------|------------------|  
 | `=`   | Equal            |  
@@ -41,7 +40,6 @@ It is made up of three parts:
 | `!=`  | Not equal        |  
 
 #### Right
-
 Can be the same values as the left side or a number.    
 Supports suffixes e.g. `200m` `150k` `99` `92`  etc 
 
