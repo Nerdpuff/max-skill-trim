@@ -8,8 +8,9 @@ Look at branch [custom trims](https://github.com/NathanQuayle/max-skill-trim/tre
 
 ## Installing custom trims
 
-Any image can be used as a trim.  
-You can find a lot of premade trims [here](https://nerdpuff.github.io/max-skill-trim/)
+Any 60x29px image can be used as a trim.  
+You can find a lot of premade trims [here](https://nerdpuff.github.io/max-skill-trim/)  
+Note: The release of sailing changed the size of the skill panels, so some older trims may not display correctly
 
 To install:    
 Drop the trim image file into the trims folder, which can be opened from the side-panel.  
