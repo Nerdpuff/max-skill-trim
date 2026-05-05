@@ -54,6 +54,11 @@ public interface MaxSkillTrimConfig extends Config
         return "full-trim.png";
     }
 
+
+    /*
+        Format: semicolon separated conditions
+        Condition: <path>:<left> <op> <right> [<skill> [<skill> ...]][:disabled]
+     */
     @ConfigItem(
             keyName = TRIM_CONDITIONS,
             name = "Trim conditions",
